@@ -132,7 +132,6 @@ if { $bCheckIPs == 1 } {
 xilinx.com:ip:xdma:4.2\
 xilinx.com:ip:axi_bram_ctrl:4.1\
 xilinx.com:ip:blk_mem_gen:8.4\
-xilinx.com:ip:smartconnect:1.0\
 "
 
    set list_ips_missing ""
@@ -260,21 +259,16 @@ proc create_root_design { parentCell } {
   # Create instance: blk_mem_gen_0, and set properties
   set blk_mem_gen_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0 ]
 
-  # Create instance: smartconnect_0, and set properties
-  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
-  set_property -dict [list \
-    CONFIG.NUM_MI {2} \
-    CONFIG.NUM_SI {1} \
-  ] $smartconnect_0
-
+  # Create instance: axi_interconnect_0, and set properties
+  set axi_interconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_0 ]
 
   # Create interface connections
   connect_bd_intf_net -intf_net S_AXIS_C2H_0_0_1 [get_bd_intf_ports AXIS_C2H] [get_bd_intf_pins xdma_0/S_AXIS_C2H_0]
   connect_bd_intf_net -intf_net axi_bram_ctrl_0_BRAM_PORTA [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA] [get_bd_intf_pins blk_mem_gen_0/BRAM_PORTA]
-  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_ports AXIL] [get_bd_intf_pins smartconnect_0/M00_AXI]
-  connect_bd_intf_net -intf_net smartconnect_0_M01_AXI [get_bd_intf_pins smartconnect_0/M01_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_ports AXIL] [get_bd_intf_pins axi_interconnect_0/M00_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_0_M01_AXI [get_bd_intf_pins axi_interconnect_0/M01_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
   connect_bd_intf_net -intf_net xdma_0_M_AXIS_H2C_0 [get_bd_intf_ports AXIS_H2C] [get_bd_intf_pins xdma_0/M_AXIS_H2C_0]
-  connect_bd_intf_net -intf_net xdma_0_M_AXI_LITE [get_bd_intf_pins xdma_0/M_AXI_LITE] [get_bd_intf_pins smartconnect_0/S00_AXI]
+  connect_bd_intf_net -intf_net xdma_0_M_AXI_LITE [get_bd_intf_pins xdma_0/M_AXI_LITE] [get_bd_intf_pins axi_interconnect_0/S00_AXI]
   connect_bd_intf_net -intf_net xdma_0_pcie_mgt [get_bd_intf_ports PCIe] [get_bd_intf_pins xdma_0/pcie_mgt]
 
   # Create port connections
@@ -284,15 +278,21 @@ proc create_root_design { parentCell } {
   [get_bd_pins xdma_0/sys_rst_n]
   connect_bd_net -net xdma_0_axi_aclk  [get_bd_pins xdma_0/axi_aclk] \
   [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] \
-  [get_bd_pins smartconnect_0/aclk] \
-  [get_bd_ports AXI_clock]
+  [get_bd_ports AXI_clock] \
+  [get_bd_pins axi_interconnect_0/ACLK] \
+  [get_bd_pins axi_interconnect_0/S00_ACLK] \
+  [get_bd_pins axi_interconnect_0/M00_ACLK] \
+  [get_bd_pins axi_interconnect_0/M01_ACLK]
   connect_bd_net -net xdma_0_axi_aresetn  [get_bd_pins xdma_0/axi_aresetn] \
   [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] \
-  [get_bd_pins smartconnect_0/aresetn] \
-  [get_bd_ports AXI_reset_n]
+  [get_bd_ports AXI_reset_n] \
+  [get_bd_pins axi_interconnect_0/ARESETN] \
+  [get_bd_pins axi_interconnect_0/S00_ARESETN] \
+  [get_bd_pins axi_interconnect_0/M00_ARESETN] \
+  [get_bd_pins axi_interconnect_0/M01_ARESETN]
 
   # Create address segments
-  assign_bd_address -offset 0x00000000 -range 0x00080000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI_LITE] [get_bd_addr_segs AXIL/Reg] -force
+  assign_bd_address -offset 0x00040000 -range 0x00040000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI_LITE] [get_bd_addr_segs AXIL/Reg] -force
   assign_bd_address -offset 0x00080000 -range 0x00002000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI_LITE] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
 
 
