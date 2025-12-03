@@ -17,7 +17,7 @@ module application #(
   output logic [1:0]                     AXIL_bresp,
   output logic                           AXIL_bvalid,
 
-  output logic  [AXIL_DATA_WIDTH-1:0]    AXIL_rdata,
+  output logic [AXIL_DATA_WIDTH-1:0]     AXIL_rdata,
   input  logic                           AXIL_rready,
   output logic [1:0]                     AXIL_rresp,
   output logic                           AXIL_rvalid,
@@ -45,163 +45,166 @@ module application #(
   input  logic                           AXI_reset_n
 );
 
-// --------------------------------------------------------------------
-// AXI-Stream Loopback Logic
-// --------------------------------------------------------------------
+  // --------------------------------------------------------------------
+  // Parameters & Constants
+  // --------------------------------------------------------------------
+  
+  // Calculate the LSB of the address to align to data width (e.g., 32-bit = 4 bytes = 2 bits shift)
+  localparam integer ADDR_LSB = $clog2(AXIL_DATA_WIDTH/8);
+  // The address width for the RAM (word addressable)
+  localparam integer MEM_ADDR_WIDTH = AXIL_ADDRESS_WIDTH - ADDR_LSB;
 
-  // Data flows from H2C (Host to Card) -> C2H (Card to Host)
+  // --------------------------------------------------------------------
+  // AXI-Stream Loopback Logic
+  // --------------------------------------------------------------------
+
   assign AXIS_C2H_tdata  = AXIS_H2C_tdata;
   assign AXIS_C2H_tkeep  = AXIS_H2C_tkeep;
   assign AXIS_C2H_tlast  = AXIS_H2C_tlast;
   assign AXIS_C2H_tvalid = AXIS_H2C_tvalid;
   assign AXIS_H2C_tready = AXIS_C2H_tready;
 
-// -----------------------------------------------------------------------------
-// Internal signals
-// -----------------------------------------------------------------------------
+  // -----------------------------------------------------------------------------
+  // Internal signals
+  // -----------------------------------------------------------------------------
 
-  logic                                   data_pending;
+  logic                          write_enable;
+  logic [AXIL_DATA_WIDTH-1:0]    write_data;
+  logic [MEM_ADDR_WIDTH-1:0]     write_address;
 
-  logic                                   write_enable;
-  logic                                   write_select;
-  logic  [AXIL_DATA_WIDTH-1:0]            write_data;
-  logic  [KEY_BITS-1:0]                   write_address;
-  logic  [DESTINATION_BITS-1:0]           destination_read;
-  logic  [SOURCE_BITS-1:0]                source_read;
+  logic                          read_enable;
+  logic [MEM_ADDR_WIDTH-1:0]     read_address;
+  logic                          read_pending;
+  logic [AXIL_DATA_WIDTH-1:0]    read_data;
 
-  logic                                   read_enable;
-  logic                                   read_select;
-  logic  [KEY_BITS-1:0]                   read_address;
-  logic                                   araddr_valid;
-  logic  [AXIL_ADDRESS_WIDTH-1:0]         araddr_latched;
-  logic                                   read_pending;
+  logic                          araddr_valid;
+  logic [AXIL_ADDRESS_WIDTH-1:0] araddr_latched;
 
-  logic                                   wdata_valid;
-  logic  [AXIL_DATA_WIDTH-1:0]            wdata_latched;
-  logic                                   awaddr_valid;
-  logic  [AXIL_ADDRESS_WIDTH-1:0]         awaddr_latched;
+  logic                          wdata_valid;
+  logic [AXIL_DATA_WIDTH-1:0]    wdata_latched;
+  logic                          awaddr_valid;
+  logic [AXIL_ADDRESS_WIDTH-1:0] awaddr_latched;
 
-// -----------------------------------------------------------------------------
-// DPRAMs
-// -----------------------------------------------------------------------------
-
+  // -----------------------------------------------------------------------------
+  // DPRAM Instantiation
+  // -----------------------------------------------------------------------------
+  // Port A: Disconnected (Reserved for RTL)
+  // Port B: Connected to AXI-Lite
+  
   DPRAM #(
-    .DATA_WIDTH     (DESTINATION_BITS),
-    .ADDRESS_WIDTH  (KEY_BITS)
-  ) destination_DPRAM (
-    .clka           (transmit_axis.aclk),
-    .clkb           (configuration_axil.aclk),
-    .rsta           (~transmit_axis.aresetn),
-    .rstb           (~configuration_axil.aresetn),
-    .addra          (transmit_axis.tdata[KEY_BITS+:KEY_BITS]),
-    .addrb          (write_enable ? write_address : read_address),
-    .ena            (transmit_axis.tvalid & transmit_axis.tready),
-    .enb            (write_enable ? write_select : (read_enable & read_select)),
-    .wea            ('0),
-    .web            (write_select & write_enable),
-    .dina           ('0),
-    .dinb           (write_data[DESTINATION_BITS-1:0]),
-    .douta          (destination_data),
-    .doutb          (destination_read)
+    .DATA_WIDTH    (AXIL_DATA_WIDTH),
+    .ADDRESS_WIDTH (MEM_ADDR_WIDTH)
+  ) generic_DPRAM (
+    // --- PORT A (User RTL - Currently Disconnected) ---
+    .clka  (AXI_clock),
+    .rsta  (~AXI_reset_n),
+    .ena   (1'b0),         // Disabled
+    .wea   (1'b0),         // Write Disabled
+    .addra ('0),           // Address 0
+    .dina  ('0),           // Data 0
+    .douta (),             // Open
+
+    // --- PORT B (AXI-Lite Access) ---
+    .clkb  (AXI_clock),
+    .rstb  (~AXI_reset_n),
+    .enb   (write_enable | read_enable),
+    .web   (write_enable), // Write Enable (1=Write, 0=Read)
+    .addrb (write_enable ? write_address : read_address),
+    .dinb  (write_data),
+    .doutb (read_data)
   );
 
-  DPRAM #(
-    .DATA_WIDTH     (SOURCE_BITS),
-    .ADDRESS_WIDTH  (KEY_BITS)
-  ) source_DPRAM (
-    .clka           (transmit_axis.aclk),
-    .clkb           (configuration_axil.aclk),
-    .rsta           (~transmit_axis.aresetn),
-    .rstb           (~configuration_axil.aresetn),
-    .addra          (transmit_axis.tdata[0+:KEY_BITS]),
-    .addrb          (write_enable ? write_address : read_address),
-    .ena            (transmit_axis.tvalid & transmit_axis.tready),
-    .enb            (write_enable ? (~write_select) : (read_enable & ~read_select)),
-    .wea            ('0),
-    .web            (~write_select & write_enable),
-    .dina           ('0),
-    .dinb           (write_data[SOURCE_BITS-1:0]),
-    .douta          (source_data),
-    .doutb          (source_read)
-  );
+  // -----------------------------------------------------------------------------
+  // AXI Lite Writes
+  // -----------------------------------------------------------------------------
 
-// -----------------------------------------------------------------------------
-// AXI Lite writes
-// -----------------------------------------------------------------------------
-
-  always_ff @(posedge configuration_axil.aclk) begin
-    if (~configuration_axil.aresetn) begin
-      wdata_valid               <= '0;
-      wdata_latched             <= '0;
-      awaddr_valid              <= '0;
-      awaddr_latched            <= '0;
-      configuration_axil.bvalid <= '0;
+  always_ff @(posedge AXI_clock) begin
+    if (~AXI_reset_n) begin
+      wdata_valid   <= '0;
+      wdata_latched <= '0;
+      awaddr_valid  <= '0;
+      awaddr_latched<= '0;
+      AXIL_bvalid   <= '0;
     end else begin
-      if (configuration_axil.wvalid && configuration_axil.wready) begin
-        wdata_valid    <= 1'b1;
-        wdata_latched  <= configuration_axil.wdata;
+      // Latch Write Data
+      if (AXIL_wvalid && AXIL_wready) begin
+        wdata_valid   <= 1'b1;
+        wdata_latched <= AXIL_wdata;
       end
-      if (configuration_axil.awvalid && configuration_axil.awready) begin
+      
+      // Latch Write Address
+      if (AXIL_awvalid && AXIL_awready) begin
         awaddr_valid   <= 1'b1;
-        awaddr_latched <= configuration_axil.awaddr;
+        awaddr_latched <= AXIL_awaddr;
       end
+      
+      // Execute Write (One Cycle Pulse)
       if (write_enable) begin
-        configuration_axil.bvalid <= 1'b1;
-        awaddr_valid   <= 1'b0;
-        wdata_valid    <= 1'b0;
+        AXIL_bvalid  <= 1'b1;
+        awaddr_valid <= 1'b0;
+        wdata_valid  <= 1'b0;
       end
-      if (configuration_axil.bvalid && configuration_axil.bready) begin
-        configuration_axil.bvalid <= 1'b0;
+      
+      // Handle Response Handshake
+      if (AXIL_bvalid && AXIL_bready) begin
+        AXIL_bvalid <= 1'b0;
       end
     end
   end
 
-  assign configuration_axil.awready = ~awaddr_valid & ~configuration_axil.bvalid;
-  assign configuration_axil.wready  = ~wdata_valid  & ~configuration_axil.bvalid;
-  assign configuration_axil.bresp   = '0;
-  assign configuration_axil.buser   = '0;
+  assign AXIL_awready = ~awaddr_valid & ~AXIL_bvalid;
+  assign AXIL_wready  = ~wdata_valid  & ~AXIL_bvalid;
+  assign AXIL_bresp   = '0; // OKAY
 
-  assign write_enable  = awaddr_valid & wdata_valid & ~configuration_axil.bvalid;
-  assign write_select  = awaddr_latched[KEY_BITS+3];
+  // Trigger write when we have both address and data latched
+  assign write_enable  = awaddr_valid & wdata_valid & ~AXIL_bvalid;
   assign write_data    = wdata_latched;
-  assign write_address = awaddr_latched[KEY_BITS+2:3];
+  // Convert byte address to word address
+  assign write_address = awaddr_latched[AXIL_ADDRESS_WIDTH-1 : ADDR_LSB];
 
-// -----------------------------------------------------------------------------
-// AXI Lite reads
-// -----------------------------------------------------------------------------
+  // -----------------------------------------------------------------------------
+  // AXI Lite Reads
+  // -----------------------------------------------------------------------------
 
-  always_ff @(posedge configuration_axil.aclk) begin
-    if (~configuration_axil.aresetn) begin
-      araddr_valid              <= '0;
-      araddr_latched            <= '0;
-      configuration_axil.rvalid <= '0;
-      read_pending              <= '0;
+  always_ff @(posedge AXI_clock) begin
+    if (~AXI_reset_n) begin
+      araddr_valid   <= '0;
+      araddr_latched <= '0;
+      AXIL_rvalid    <= '0;
+      read_pending   <= '0;
     end else begin
-      if (configuration_axil.arvalid && configuration_axil.arready) begin
+      // Latch Read Address
+      if (AXIL_arvalid && AXIL_arready) begin
         araddr_valid   <= 1'b1;
-        araddr_latched <= configuration_axil.araddr;
+        araddr_latched <= AXIL_araddr;
       end
+      
+      // Execute Read (Pulse enable to RAM)
       if (read_enable) begin
-        araddr_valid   <= 1'b0;
-        read_pending   <= 1'b1;
+        araddr_valid <= 1'b0;
+        read_pending <= 1'b1;
       end
+      
+      // Wait for RAM latency (1 cycle) then assert Valid
       if (read_pending) begin
-        configuration_axil.rvalid <= 1'b1;
-        read_pending              <= 1'b0;
+        AXIL_rvalid  <= 1'b1;
+        read_pending <= 1'b0;
       end
-      if (configuration_axil.rvalid && configuration_axil.rready) begin
-        configuration_axil.rvalid <= '0;
+      
+      // Handle Response Handshake
+      if (AXIL_rvalid && AXIL_rready) begin
+        AXIL_rvalid <= '0;
       end
     end
   end
 
-  assign configuration_axil.arready = ~araddr_valid & ~configuration_axil.rvalid;
-  assign configuration_axil.rdata   = read_select ? {{(AXIL_DATA_WIDTH-DESTINATION_BITS){1'b0}}, destination_read} : {{(AXIL_DATA_WIDTH-SOURCE_BITS){1'b0}}, source_read};
-  assign configuration_axil.ruser   = '0;
-  assign configuration_axil.rresp   = '0;
+  assign AXIL_arready = ~araddr_valid & ~AXIL_rvalid;
+  assign AXIL_rresp   = '0; // OKAY
+  assign AXIL_rdata   = read_data;
 
-  assign read_enable  = araddr_valid & ~configuration_axil.rvalid & ~write_enable;
-  assign read_select  = araddr_latched[KEY_BITS+3];
-  assign read_address = araddr_latched[KEY_BITS+2:3];
+  // Trigger read when we have an address and we aren't currently writing
+  assign read_enable  = araddr_valid & ~AXIL_rvalid & ~write_enable;
+  // Convert byte address to word address
+  assign read_address = araddr_latched[AXIL_ADDRESS_WIDTH-1 : ADDR_LSB];
 
 endmodule
