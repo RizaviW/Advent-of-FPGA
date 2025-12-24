@@ -24,7 +24,7 @@ module shell #(
   localparam integer RAM_ADDRESS_WIDTH  = ADDRESS_WIDTH - 1;
 
   // --------------------------------------------------------------------
-  // Internal signals
+  // Signals
   // --------------------------------------------------------------------
 
   logic [31:0]                   AXIL_araddr;
