@@ -16,11 +16,12 @@ module shell #(
   // AXI4-Lite data width
   localparam integer AXIL_DATA_WIDTH    = 32;
   // AXI4-Lite address width
-  localparam integer AXIL_ADDRESS_WIDTH = 18;
+  localparam integer AXIL_ADDRESS_WIDTH = 11;
   // Calculate the LSB of the address to align to data width (e.g., 32-bit = 4 bytes = 2 bits shift)
   localparam integer ADDRESS_LSB        = $clog2(AXIL_DATA_WIDTH/8);
+  localparam integer ADDRESS_WIDTH      = AXIL_ADDRESS_WIDTH - ADDRESS_LSB;
   // The address width for the RAM (word addressable)
-  localparam integer RAM_ADDRESS_WIDTH  = AXIL_ADDRESS_WIDTH - ADDRESS_LSB;
+  localparam integer RAM_ADDRESS_WIDTH  = ADDRESS_WIDTH - 1;
 
   // --------------------------------------------------------------------
   // Internal signals
@@ -60,20 +61,26 @@ module shell #(
   logic                          system_clock;
   logic                          system_reset;
 
-  logic                          CSR_write_enable;
-  logic [AXIL_DATA_WIDTH-1:0]    CSR_write_data;
-  logic [RAM_ADDRESS_WIDTH-1:0]  CSR_write_address;
-  logic                          CSR_read_enable;
-  logic [AXIL_DATA_WIDTH-1:0]    CSR_read_data;
-  logic [RAM_ADDRESS_WIDTH-1:0]  CSR_read_address;
+  logic                          CSR_RAM_valid;
+  logic                          CSR_RAM_write_enable;
+  logic [RAM_ADDRESS_WIDTH-1:0]  CSR_RAM_address;
+  logic [AXIL_DATA_WIDTH-1:0]    CSR_RAM_write_data;
+  logic [AXIL_DATA_WIDTH-1:0]    CSR_RAM_read_data;
+
+  logic                          CSR_FF_valid;
+  logic                          CSR_FF_write_enable;
+  logic [RAM_ADDRESS_WIDTH-1:0]  CSR_FF_address;
+  logic [AXIL_DATA_WIDTH-1:0]    CSR_FF_write_data;
+  logic [AXIL_DATA_WIDTH-1:0]    CSR_FF_read_data;
 
   logic                          write_enable;
   logic [AXIL_DATA_WIDTH-1:0]    write_data;
-  logic [RAM_ADDRESS_WIDTH-1:0]  write_address;
+  logic [ADDRESS_WIDTH-1:0]      write_address;
   logic                          read_enable;
   logic [AXIL_DATA_WIDTH-1:0]    read_data;
-  logic [RAM_ADDRESS_WIDTH-1:0]  read_address;
+  logic [ADDRESS_WIDTH-1:0]      read_address;
   logic                          read_pending;
+  logic [AXIL_DATA_WIDTH-1:0]    doutb;
 
   logic                          araddr_valid;
   logic [AXIL_ADDRESS_WIDTH-1:0] araddr_latched;
@@ -91,94 +98,108 @@ module shell #(
 
   system #(
   ) system (
-    .AXIL_araddr        (AXIL_araddr),
-    .AXIL_arprot        (AXIL_arprot),
-    .AXIL_arready       (AXIL_arready),
-    .AXIL_arvalid       (AXIL_arvalid),
-    .AXIL_awaddr        (AXIL_awaddr),
-    .AXIL_awprot        (AXIL_awprot),
-    .AXIL_awready       (AXIL_awready),
-    .AXIL_awvalid       (AXIL_awvalid),
-    .AXIL_bready        (AXIL_bready),
-    .AXIL_bresp         (AXIL_bresp),
-    .AXIL_bvalid        (AXIL_bvalid),
-    .AXIL_rdata         (AXIL_rdata),
-    .AXIL_rready        (AXIL_rready),
-    .AXIL_rresp         (AXIL_rresp),
-    .AXIL_rvalid        (AXIL_rvalid),
-    .AXIL_wdata         (AXIL_wdata),
-    .AXIL_wready        (AXIL_wready),
-    .AXIL_wstrb         (AXIL_wstrb),
-    .AXIL_wvalid        (AXIL_wvalid),
-    .AXIS_C2H_tdata     (AXIS_C2H_tdata),
-    .AXIS_C2H_tkeep     (AXIS_C2H_tkeep),
-    .AXIS_C2H_tlast     (AXIS_C2H_tlast),
-    .AXIS_C2H_tready    (AXIS_C2H_tready),
-    .AXIS_C2H_tvalid    (AXIS_C2H_tvalid),
-    .AXIS_H2C_tdata     (AXIS_H2C_tdata),
-    .AXIS_H2C_tkeep     (AXIS_H2C_tkeep),
-    .AXIS_H2C_tlast     (AXIS_H2C_tlast),
-    .AXIS_H2C_tready    (AXIS_H2C_tready),
-    .AXIS_H2C_tvalid    (AXIS_H2C_tvalid),
-    .AXI_clock          (AXI_clock),
-    .AXI_reset_n        (AXI_reset_n),
-    .PCIe_rxn           (PCIe_RX_n),
-    .PCIe_rxp           (PCIe_RX_p),
-    .PCIe_txn           (PCIe_TX_n),
-    .PCIe_txp           (PCIe_TX_p),
-    .system_clock       (system_clock),
-    .system_reset       (system_reset)
+    .AXIL_araddr                 (AXIL_araddr),
+    .AXIL_arprot                 (AXIL_arprot),
+    .AXIL_arready                (AXIL_arready),
+    .AXIL_arvalid                (AXIL_arvalid),
+    .AXIL_awaddr                 (AXIL_awaddr),
+    .AXIL_awprot                 (AXIL_awprot),
+    .AXIL_awready                (AXIL_awready),
+    .AXIL_awvalid                (AXIL_awvalid),
+    .AXIL_bready                 (AXIL_bready),
+    .AXIL_bresp                  (AXIL_bresp),
+    .AXIL_bvalid                 (AXIL_bvalid),
+    .AXIL_rdata                  (AXIL_rdata),
+    .AXIL_rready                 (AXIL_rready),
+    .AXIL_rresp                  (AXIL_rresp),
+    .AXIL_rvalid                 (AXIL_rvalid),
+    .AXIL_wdata                  (AXIL_wdata),
+    .AXIL_wready                 (AXIL_wready),
+    .AXIL_wstrb                  (AXIL_wstrb),
+    .AXIL_wvalid                 (AXIL_wvalid),
+    .AXIS_C2H_tdata              (AXIS_C2H_tdata),
+    .AXIS_C2H_tkeep              (AXIS_C2H_tkeep),
+    .AXIS_C2H_tlast              (AXIS_C2H_tlast),
+    .AXIS_C2H_tready             (AXIS_C2H_tready),
+    .AXIS_C2H_tvalid             (AXIS_C2H_tvalid),
+    .AXIS_H2C_tdata              (AXIS_H2C_tdata),
+    .AXIS_H2C_tkeep              (AXIS_H2C_tkeep),
+    .AXIS_H2C_tlast              (AXIS_H2C_tlast),
+    .AXIS_H2C_tready             (AXIS_H2C_tready),
+    .AXIS_H2C_tvalid             (AXIS_H2C_tvalid),
+    .AXI_clock                   (AXI_clock),
+    .AXI_reset_n                 (AXI_reset_n),
+    .PCIe_rxn                    (PCIe_RX_n),
+    .PCIe_rxp                    (PCIe_RX_p),
+    .PCIe_txn                    (PCIe_TX_n),
+    .PCIe_txp                    (PCIe_TX_p),
+    .system_clock                (system_clock),
+    .system_reset                (system_reset)
   );
 
   application #(
-    .CSR_DATA_WIDTH     (AXIL_DATA_WIDTH),
-    .CSR_ADDRESS_WIDTH  (RAM_ADDRESS_WIDTH)
+    .CSR_DATA_WIDTH              (AXIL_DATA_WIDTH),
+    .CSR_ADDRESS_WIDTH           (RAM_ADDRESS_WIDTH)
   ) application (
-    .clock              (AXI_clock),
-    .reset_n            (AXI_reset_n),
-    .CSR_write_enable   (CSR_write_enable),
-    .CSR_write_data     (CSR_write_data),
-    .CSR_write_address  (CSR_write_address),
-    .CSR_read_enable    (CSR_read_enable),
-    .CSR_read_data      (CSR_read_data),
-    .CSR_read_address   (CSR_read_address),
-    .AXIS_C2H_tdata     (AXIS_C2H_tdata),
-    .AXIS_C2H_tkeep     (AXIS_C2H_tkeep),
-    .AXIS_C2H_tlast     (AXIS_C2H_tlast),
-    .AXIS_C2H_tready    (AXIS_C2H_tready),
-    .AXIS_C2H_tvalid    (AXIS_C2H_tvalid),
-    .AXIS_H2C_tdata     (AXIS_H2C_tdata),
-    .AXIS_H2C_tkeep     (AXIS_H2C_tkeep),
-    .AXIS_H2C_tlast     (AXIS_H2C_tlast),
-    .AXIS_H2C_tready    (AXIS_H2C_tready),
-    .AXIS_H2C_tvalid    (AXIS_H2C_tvalid)
+    .clock                       (AXI_clock),
+    .reset_n                     (AXI_reset_n),
+    .CSR_RAM_valid               (CSR_RAM_valid),
+    .CSR_RAM_write_enable        (CSR_RAM_write_enable),
+    .CSR_RAM_address             (CSR_RAM_address),
+    .CSR_RAM_write_data          (CSR_RAM_write_data),
+    .CSR_RAM_read_data           (CSR_RAM_read_data),
+    .CSR_FF_valid                (CSR_FF_valid),
+    .CSR_FF_write_enable         (CSR_FF_write_enable),
+    .CSR_FF_address              (CSR_FF_address),
+    .CSR_FF_write_data           (CSR_FF_write_data),
+    .CSR_FF_read_data            (CSR_FF_read_data),
+    .AXIS_C2H_tdata              (AXIS_C2H_tdata),
+    .AXIS_C2H_tkeep              (AXIS_C2H_tkeep),
+    .AXIS_C2H_tlast              (AXIS_C2H_tlast),
+    .AXIS_C2H_tready             (AXIS_C2H_tready),
+    .AXIS_C2H_tvalid             (AXIS_C2H_tvalid),
+    .AXIS_H2C_tdata              (AXIS_H2C_tdata),
+    .AXIS_H2C_tkeep              (AXIS_H2C_tkeep),
+    .AXIS_H2C_tlast              (AXIS_H2C_tlast),
+    .AXIS_H2C_tready             (AXIS_H2C_tready),
+    .AXIS_H2C_tvalid             (AXIS_H2C_tvalid)
   );
 
   DPRAM #(
-    .DATA_WIDTH         (AXIL_DATA_WIDTH),
-    .ADDRESS_WIDTH      (RAM_ADDRESS_WIDTH)
-  ) generic_DPRAM (
+    .DATA_WIDTH                  (AXIL_DATA_WIDTH),
+    .ADDRESS_WIDTH               (RAM_ADDRESS_WIDTH)
+  ) DPRAM (
     // --- PORT A (Application) ---
-    .clka               (AXI_clock),
-    .rsta               (~AXI_reset_n),
-    .ena                (CSR_write_enable | CSR_read_enable),
-    .wea                (CSR_write_enable),
-    .addra              (CSR_write_enable ? CSR_write_address : CSR_read_address),
-    .dina               (CSR_write_data),
-    .douta              (CSR_read_data),
-
-    // --- PORT B (AXI-Lite Access) ---
-    .clkb               (AXI_clock),
-    .rstb               (~AXI_reset_n),
-    .enb                (write_enable | read_enable),
-    .web                (write_enable),
-    .addrb              (write_enable ? write_address : read_address),
-    .dinb               (write_data),
-    .doutb              (read_data)
+    .clka                        (AXI_clock),
+    .rsta                        (~AXI_reset_n),
+    .ena                         (CSR_RAM_valid),
+    .wea                         (CSR_RAM_write_enable),
+    .addra                       (CSR_RAM_address),
+    .dina                        (CSR_RAM_write_data),
+    .douta                       (CSR_RAM_read_data),
+    // --- PORT B (AXI-Lite RAM Access) ---
+    .clkb                        (AXI_clock),
+    .rstb                        (~AXI_reset_n),
+    .enb                         ((write_enable & write_address[ADDRESS_WIDTH-1]) | (read_enable & read_address[ADDRESS_WIDTH-1])),
+    .web                         (write_enable),
+    .addrb                       (write_enable ? write_address[RAM_ADDRESS_WIDTH-1:0] : read_address[RAM_ADDRESS_WIDTH-1:0]),
+    .dinb                        (write_data),
+    .doutb                       (doutb)
   );
 
   // --------------------------------------------------------------------
-  // AXI Lite Writes
+  // AXI-Lite Register Access
+  // --------------------------------------------------------------------
+
+  assign CSR_FF_valid        = (write_enable & ~write_address[ADDRESS_WIDTH-1]) | (read_enable & ~read_address[ADDRESS_WIDTH-1]);
+  assign CSR_FF_write_enable = write_enable;
+  assign CSR_FF_address      = write_enable ? write_address[RAM_ADDRESS_WIDTH-1:0] : read_address[RAM_ADDRESS_WIDTH-1:0];
+  assign CSR_FF_write_data   = write_data;
+
+  assign read_data           = read_address[ADDRESS_WIDTH-1] ? doutb : CSR_FF_read_data;
+
+  // --------------------------------------------------------------------
+  // AXI-Lite Writes
   // --------------------------------------------------------------------
 
   always_ff @(posedge AXI_clock) begin
@@ -226,7 +247,7 @@ module shell #(
   assign write_address = awaddr_latched[AXIL_ADDRESS_WIDTH-1 : ADDRESS_LSB];
 
   // --------------------------------------------------------------------
-  // AXI Lite Reads
+  // AXI-Lite Reads
   // --------------------------------------------------------------------
 
   always_ff @(posedge AXI_clock) begin
