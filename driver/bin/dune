@@ -1,0 +1,5 @@
+(executable
+ (public_name driver)
+ (name main)
+ (libraries core core_unix ctypes ctypes.foreign)
+ (foreign_stubs (language c) (names vfio_bridge)))
