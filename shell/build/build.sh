@@ -61,8 +61,6 @@ setup_vivado() {
 }
 
 generate_tcl() {
-    # We indent the Tcl code here for Bash readability.
-    # Vivado handles the leading whitespace in the file fine.
     cat <<EOT > "$BUILD_TCL"
     # --------------------------------------------------------------------------
     # 1. Project Setup
@@ -119,7 +117,7 @@ while getopts "bfc" opt; do
     esac
 done
 
-# Logic Adjustment: If -b AND -f are used, we must run Vivado.
+# Logic Adjustment: If -b AND -f are used, we must run Vivado
 if [ "$COMPILE" -eq 1 ]; then
     SKIP_VIVADO=0
 fi
