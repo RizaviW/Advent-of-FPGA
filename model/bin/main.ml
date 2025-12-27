@@ -1,12 +1,12 @@
-(* =============================================================================
-   THE SYSTOLIC SOLVER :: GF(2) LINEAR ALGEBRA
-   =============================================================================
-   
-   A streaming implementation of Gaussian Elimination over a Galois Field (2).
-   Designed for finding Minimum Hamming Weight solutions to underdetermined systems.
-   
-   Compile: ocamlfind ocamlopt -package str -linkpkg solution.ml -o solution
-   Usage:   ./solution [optional: line_number for tutorial mode]
+(** =============================================================================
+    THE SYSTOLIC SOLVER :: GF(2) LINEAR ALGEBRA
+    =============================================================================
+
+    A streaming implementation of Gaussian Elimination over a Galois Field (2).
+    Designed for finding Minimum Hamming Weight solutions to underdetermined systems.
+
+    Compile: ocamlfind ocamlopt -package str -linkpkg solution.ml -o solution
+    Usage:   ./solution [optional: line_number for tutorial mode]
 *)
 
 open Printf
