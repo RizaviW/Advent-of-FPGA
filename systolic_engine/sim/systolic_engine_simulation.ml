@@ -39,13 +39,13 @@ let write_csr ~addr ~data (sim : Harness.Sim.t) =
 let send_axis_word ~data ~last (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
   let cycle () = Cyclesim.cycle sim in
-  inputs.axis_h2c_src.tdata  <--. data;
-  inputs.axis_h2c_src.tkeep  <--. 0xFF;
-  inputs.axis_h2c_src.tlast  := if last then Bits.vdd else Bits.gnd;
-  inputs.axis_h2c_src.tvalid := Bits.vdd;
+  inputs.axis_h2c_src.tdata   <--. data;
+  inputs.axis_h2c_src.tkeep   <--. 0xFF;
+  inputs.axis_h2c_src.tlast   := if last then Bits.vdd else Bits.gnd;
+  inputs.axis_h2c_src.tvalid  := Bits.vdd;
   inputs.axis_c2h_sink.tready := Bits.vdd;
   cycle ();
-  inputs.axis_h2c_src.tvalid := Bits.gnd;
+  inputs.axis_h2c_src.tvalid  := Bits.gnd;
   cycle ()
 ;;
 
