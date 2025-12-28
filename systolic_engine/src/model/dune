@@ -1,0 +1,3 @@
+(library
+ (name systolic_solver)
+ (libraries str))

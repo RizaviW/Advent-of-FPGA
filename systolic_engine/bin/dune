@@ -1,0 +1,7 @@
+(executable
+ (public_name systolic_engine)
+ (name generate)
+ (libraries core.command core_unix.command_unix core core_unix hardcaml systolic_engine)
+ (preprocess (pps ppx_jane))
+ (modes byte exe)
+ (promote))
