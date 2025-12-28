@@ -9,7 +9,7 @@ open Systolic_engine
 let generate_systolic_engine_rtl () =
   let module C = Circuit.With_interface (I) (O) in
   let scope = Scope.create ~auto_label_hierarchical_ports:true () in
-  let circuit = C.create_exn ~name:"systolic_engine" (hierarchical scope) in
+  let circuit = C.create_exn ~name:"application" (hierarchical scope) in
   let rtl =
     Rtl.create
       ~database:(Scope.circuit_database scope)
