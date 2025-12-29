@@ -146,7 +146,7 @@ let create (i : Signal.t I.t) : Signal.t O.t =
       let selected_in = input_index.value ==: of_int_trunc ~width:2 k in
       let valid_in    = i.I.axis_h2c_src.tvalid &: selected_in in
       
-      let meta_in     = mux2 input_last (sll (one 8) ~by:7) (zero 8) in
+      let metadata_in = mux2 input_last (sll (one 8) ~by:7) (zero 8) in
 
       Core.create
         { Core.I.
@@ -155,7 +155,7 @@ let create (i : Signal.t I.t) : Signal.t O.t =
         ; ready_in    = core_ready_ins.(k).value
         ; valid_in    = valid_in
         ; data_in     = i.I.axis_h2c_src.tdata
-        ; metadata_in = meta_in
+        ; metadata_in = metadata_in
         }
     )
   in
