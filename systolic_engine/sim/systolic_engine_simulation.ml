@@ -84,11 +84,7 @@ type axis_packet =
   ; last : bool
   }
 
-let run_duplex
-    (sim : Harness.Sim.t)
-    ~(packets : axis_packet list)
-    ~(expected_words : int)
-  =
+let run_duplex (sim : Harness.Sim.t) ~(packets : axis_packet list) ~(expected_words : int) =
   let i = Cyclesim.inputs  sim in
   let o = Cyclesim.outputs sim in
 
@@ -118,10 +114,7 @@ let run_duplex
     decr timeout;
 
     (* Input handshake *)
-    let fire_in =
-      Bits.to_bool !(i.axis_h2c_src.tvalid)
-      && Bits.to_bool !(o.axis_h2c_sink.tready)
-    in
+    let fire_in = Bits.to_bool !(i.axis_h2c_src.tvalid) && Bits.to_bool !(o.axis_h2c_sink.tready) in
     if fire_in then send_q := List.tl_exn !send_q;
 
     (* Output capture *)
@@ -240,9 +233,7 @@ let%expect_test "Super Stress (50 Matrices)" =
     in
 
     let expected = List.concat_map scenarios ~f:snd in
-    let actual =
-      run_duplex sim ~packets ~expected_words:(List.length expected)
-    in
+    let actual = run_duplex sim ~packets ~expected_words:(List.length expected) in
 
     let sent     = List.length packets in
     let received = List.length actual in

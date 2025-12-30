@@ -1,0 +1,4 @@
+(executable
+ (public_name reference)
+ (name systolic_solver)
+ (libraries str))
