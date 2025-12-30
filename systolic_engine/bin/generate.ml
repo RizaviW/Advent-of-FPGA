@@ -1,6 +1,6 @@
-open Core
-open Hardcaml
-open Systolic_engine
+open! Core
+open! Hardcaml
+open! Systolic_engine
 
 (* ============================================================= *)
 (* RTL generation                                                *)
