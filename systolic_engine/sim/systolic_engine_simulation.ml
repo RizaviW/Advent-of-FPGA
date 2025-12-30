@@ -130,7 +130,7 @@ let run_duplex
   done;
 
   if !timeout = 0 then
-    printf "WARNING: Simulation timeout\n";
+    printf "WARNING: Timeout\n";
 
   !recv_q
 ;;
@@ -199,7 +199,7 @@ let%expect_test "Random Sweep" =
 ;;
 
 (* ========================================================================== *)
-(* Throughput & Stress                                                         *)
+(* Throughput & Stress                                                        *)
 (* ========================================================================== *)
 
 let%expect_test "Back-to-Back Matrices" =
@@ -228,7 +228,7 @@ let%expect_test "Super Stress (50 Matrices)" =
 
     let scenarios =
       List.init 50 ~f:(fun _ ->
-        let len = 2 + Random.int 3 in
+        let len = 20 + Random.int 30 in
         let rows = List.init len ~f:(fun _ -> Random.int64 256L) in
         rows, Reference.compute rows)
     in
@@ -244,10 +244,10 @@ let%expect_test "Super Stress (50 Matrices)" =
       run_duplex sim ~packets ~expected_words:(List.length expected)
     in
 
-    printf "RESULT: Sent %d, Received %d, matches %b\n"
+    printf "Super Stress (sent %d, received %d, matches %b)\n"
       (List.length packets)
       (List.length actual)
       (List.equal Int64.equal expected actual)
   );
-  [%expect {| RESULT: Sent 153, Received 151, matches true |}]
+  [%expect {| Super Stress (sent 1754, received 400, matches true) |}]
 ;;
