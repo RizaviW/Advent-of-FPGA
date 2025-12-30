@@ -244,10 +244,14 @@ let%expect_test "Super Stress (50 Matrices)" =
       run_duplex sim ~packets ~expected_words:(List.length expected)
     in
 
-    printf "Super Stress (sent %d, received %d, matches %b)\n"
-      (List.length packets)
-      (List.length actual)
-      (List.equal Int64.equal expected actual)
+    let sent     = List.length packets in
+    let received = List.length actual in
+    let matches  = List.equal Int64.equal expected actual in
+
+    print_s [%message "Super Stress"
+      (sent     : int)
+      (received : int)
+      (matches  : bool)]
   );
-  [%expect {| Super Stress (sent 1754, received 400, matches true) |}]
+  [%expect {| ("Super Stress" (sent 1754) (received 400) (matches true)) |}]
 ;;
