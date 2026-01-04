@@ -8,7 +8,7 @@ val csr_data_width    : int
 val csr_address_width : int
 
 (* ============================================================= *)
-(* AXI-Stream                                                    *)
+(* AXI-Stream Interfaces                                         *)
 (* ============================================================= *)
 
 module AXIS_source : sig
