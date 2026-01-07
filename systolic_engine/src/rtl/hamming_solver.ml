@@ -140,7 +140,9 @@ module Make (C : Config) = struct
     let zero_weight_found   = (best_weight_seen.value ==: zero weight_width) in
 
     compile
-      [ if_ i.I.start
+      [ solution_done <-- gnd;
+
+        if_ i.I.start
           [ solver_active      <-- vdd
           ; enumeration_count  <-- zero (generator_width + 1)
           ; gray_code_register <-- zero (generator_width + 1)
@@ -148,12 +150,11 @@ module Make (C : Config) = struct
           ; current_weight     <-- popcount_chunked i.I.particular
           ; best_vector_seen   <-- i.I.particular
           ; best_weight_seen   <-- popcount_chunked i.I.particular
-          ; solution_done      <-- gnd
           ]
         [ if_ solver_active.value
             [ if_ (zero_weight_found |: stop_condition_met)
                 [ solver_active <-- gnd
-                ; solution_done <-- vdd
+                ; solution_done <-- vdd (* Pulses for exactly one cycle *)
                 ]
                 [ enumeration_count  <-- next_count
                 ; gray_code_register <-- gray_code_next
