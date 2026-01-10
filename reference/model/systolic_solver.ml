@@ -5,8 +5,8 @@
     A streaming implementation of Gaussian Elimination over a Galois Field (2).
     Designed for finding Minimum Hamming Weight solutions to underdetermined systems.
 
-    Compile: ocamlfind ocamlopt -package str -linkpkg solution.ml -o solution
-    Usage:   ./solution [optional: line_number for tutorial mode]
+    Compile: ocamlfind ocamlopt -package str -linkpkg systolic_solver.ml -o solver
+    Usage:   ./solver [optional: line_number for debug mode]
 *)
 
 open Printf
@@ -21,7 +21,7 @@ type system = { matrix : matrix; target : vector }
 
 type mode = 
   | Batch
-  | Tutorial of int
+  | Debug of int
 
 (* ========================================================================== *)
 (* UTILITIES & LOGGING                                                        *)
@@ -259,7 +259,7 @@ module Solver = struct
 end
 
 (* ========================================================================== *)
-(* MAIN EXECUTION                                                             *)
+(* LIBRARY INTERFACE & UTILITIES                                              *)
 (* ========================================================================== *)
 
 let read_systems filename =
@@ -279,48 +279,65 @@ let read_systems filename =
   with Sys_error msg -> 
     printf "Error opening file: %s\n" msg; exit 1
 
-let () =
-  let mode = 
-    if Array.length Sys.argv > 1 then
-      try Tutorial (int_of_string Sys.argv.(1))
-      with Failure _ -> 
-        printf "Usage: %s [line_number]\n" Sys.argv.(0); exit 1
-    else Batch 
-  in
-
-  let systems = read_systems "factory_input.txt" in
+(** Executes the solver on a list of systems in silent mode. *)
+let run_batch systems =
+  let count = List.length systems in
+  printf "Found %d systems. Solving...\n" count;
+  let t0 = Sys.time () in
   
-  match mode with
-  | Batch ->
-      let count = List.length systems in
-      printf "Found %d systems. Solving...\n" count;
-      let t0 = Sys.time () in
-      
-      let total_weight = 
-        List.fold_left (fun acc sys ->
-          match Solver.solve ~logger:Logger.silent sys with
-          | Some w -> acc + w
-          | None -> acc
-        ) 0 systems 
-      in
-      
-      let dt = Sys.time () -. t0 in
-      printf "------------------------------------------------\n";
-      printf "Total Minimum Hamming Weight: %d\n" total_weight;
-      printf "Execution Time: %.4f seconds\n" dt;
-      printf "------------------------------------------------\n"
+  let total_weight = 
+    List.fold_left (fun acc sys ->
+      match Solver.solve ~logger:Logger.silent sys with
+      | Some w -> acc + w
+      | None -> acc
+    ) 0 systems 
+  in
+  
+  let dt = Sys.time () -. t0 in
+  printf "------------------------------------------------\n";
+  printf "Total Minimum Hamming Weight: %d\n" total_weight;
+  printf "Execution Time: %.4f seconds\n" dt;
+  printf "------------------------------------------------\n";
+  total_weight
 
-  | Tutorial line_num ->
-      let idx = line_num - 1 in
-      if idx < 0 || idx >= List.length systems then
-        printf "Error: Line %d out of bounds.\n" line_num
-      else begin
-        printf "\n==============================================\n";
-        printf "      TUTORIAL MODE: SYSTEM #%d\n" line_num;
-        printf "==============================================\n";
-        
-        let sys = List.nth systems idx in
-        match Solver.solve ~logger:Logger.verbose sys with
-        | Some w -> printf "\nSUCCESS: Minimum Weight = %d\n" w
-        | None   -> printf "\nFAILURE: No Solution\n"
-      end
+(** Executes the solver on a specific system with full logging. *)
+let run_debug systems line_num =
+  let idx = line_num - 1 in
+  if idx < 0 || idx >= List.length systems then begin
+    printf "Error: Line %d out of bounds.\n" line_num;
+    None
+  end else begin
+    printf "\n==============================================\n";
+    printf "      DEBUG MODE: SYSTEM #%d\n" line_num;
+    printf "==============================================\n";
+    
+    let sys = List.nth systems idx in
+    let result = Solver.solve ~logger:Logger.verbose sys in
+    begin match result with
+    | Some w -> printf "\nSUCCESS: Minimum Weight = %d\n" w
+    | None   -> printf "\nFAILURE: No Solution\n"
+    end;
+    result
+  end
+
+(* ========================================================================== *)
+(* MAIN EXECUTION                                                             *)
+(* ========================================================================== *)
+
+let () =
+  (* Only execute the CLI logic if not being used as a library module *)
+  if !Sys.interactive = false then begin
+    let mode = 
+      if Array.length Sys.argv > 1 then
+        try Debug (int_of_string Sys.argv.(1))
+        with Failure _ -> 
+          printf "Usage: %s [line_number]\n" Sys.argv.(0); exit 1
+      else Batch 
+    in
+
+    let systems = read_systems "factory_input.txt" in
+    
+    match mode with
+    | Batch             -> ignore (run_batch systems)
+    | Debug line_num -> ignore (run_debug systems line_num)
+  end
